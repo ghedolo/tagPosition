@@ -335,7 +335,7 @@ function _updateChart(){
       plugins:{
         legend:{display:false},
         tooltip:{filter:function(item){return !item.dataset.label.startsWith('_ref');},
-          callbacks:{label:function(c){return c.dataset.label+': '+c.parsed.y.toFixed(0)+' m';}}}
+          callbacks:{label:function(c){var m=_tagMeta[c.dataset.label];return (m?m.letter:c.dataset.label)+': '+c.parsed.y.toFixed(0)+' m';}}}
       }
     }});
   }else{
