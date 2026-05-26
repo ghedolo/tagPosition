@@ -197,7 +197,7 @@ The **?** button opens the help panel.
 
 **Tags column**
 
-One colored circle per tracker (initial letter). Click to show/hide that tag on the map. The counter next to each circle shows the number of visible points in the current time window.
+One colored circle per tracker, labelled with the first letter of the tag name. If two tags share the same initial, the first two letters are used instead. Click to show/hide that tag on the map. The counter next to each circle shows the number of visible points in the current time window.
 
 **Controls column**
 

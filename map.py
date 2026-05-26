@@ -30,10 +30,11 @@ TAG_COLORS = ["#facc15", "#22c55e", "#a78bfa", "#ec4899", "#f97316"]
 _STATIC_JS = """
 function _mkIcon(meta,entry,isLast){
   var border=_SB[entry.status]||_DB,lc=isLast?'#ffffff':'#505050';
+  var fs=meta.letter.length>1?'9px':'13px';
   return '<div style="width:28px;height:28px;border-radius:50%;background:'+meta.color
     +';border:3px solid '+border+';box-shadow:0 1px 4px rgba(0,0,0,.5)'
     +';display:flex;align-items:center;justify-content:center'
-    +';font-weight:bold;font-size:13px;color:'+lc+';font-family:sans-serif">'+meta.letter+'</div>';
+    +';font-weight:bold;font-size:'+fs+';color:'+lc+';font-family:sans-serif">'+meta.letter+'</div>';
 }
 
 function _mkPop(entry){
@@ -145,7 +146,8 @@ function _updateCounts(){
     if((cutoff===null||new Date(me.t)>=cutoff)&&_statusEnabled[me.st]!==false)counts[me.tag]++;
   });
   Object.keys(counts).forEach(function(tag){
-    var el=document.getElementById('count_'+tag.trim()[0].toUpperCase());
+    var meta=_tagMeta[tag];
+    var el=document.getElementById('count_'+(meta?meta.letter:tag.trim()[0].toUpperCase()));
     if(el)el.textContent=counts[tag]||'';
   });
 }
@@ -210,10 +212,12 @@ function _updateStationary(){
       fillOpacity:0.15,weight:2,dashArray:'4,4'})
       .bindTooltip(_tipTxt).addTo(_g);
     if(_circ._path){_circ._path.setAttribute('fill','url(#stationaryHatch)');_circ._path.setAttribute('fill-opacity','1');}
-    var _letter=tag.trim()[0].toUpperCase();
+    var _cmeta=_tagMeta[tag];
+    var _letter=_cmeta?_cmeta.letter:tag.trim()[0].toUpperCase();
+    var _cfs=_letter.length>1?'9px':'12px';
     var _cm=L.marker([_eLat,_eLon],{
       pane:'centroidPane',
-      icon:L.divIcon({html:'<div style="width:22px;height:22px;border-radius:50%;background:#ec4899;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:12px;color:#fff;font-family:sans-serif">'+_letter+'</div>',iconSize:[22,22],iconAnchor:[11,11],className:''}),
+      icon:L.divIcon({html:'<div style="width:22px;height:22px;border-radius:50%;background:#ec4899;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.4);display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:'+_cfs+';color:#fff;font-family:sans-serif">'+_letter+'</div>',iconSize:[22,22],iconAnchor:[11,11],className:''}),
       zIndexOffset:1000
     }).bindTooltip(_tipTxt).bindPopup(_popTxt).addTo(_g);
     _cm.on('dblclick',function(e){_cm.openPopup();L.DomEvent.stopPropagation(e);});
@@ -349,8 +353,19 @@ window.setAccThreshold=function(val,btn){
 """
 
 
-def tag_letter(name: str) -> str:
-    return name.strip()[0].upper()
+def assign_letters(all_tags: list) -> dict:
+    by_first = {}
+    for name in all_tags:
+        c = name.strip()[0].upper()
+        by_first.setdefault(c, []).append(name)
+    result = {}
+    for names in by_first.values():
+        if len(names) == 1:
+            result[names[0]] = names[0].strip()[0].upper()
+        else:
+            for name in names:
+                result[name] = name.strip()[:2].upper()
+    return result
 
 
 def load_entries():
@@ -388,7 +403,7 @@ def split_entries(by_tag, cutoff_dt):
     return dict(within), extended
 
 
-def _build_legend(all_tags, tag_color, last_polled_at=""):
+def _build_legend(all_tags, tag_color, letter_map, last_polled_at=""):
     STATUS_DISPLAY = {"AGGREGATED": "Aggr", "CROWDSOURCED": "Crown", "LAST_KNOWN": "BT"}
     status_col = ""
     for status, color in STATUS_BORDER.items():
@@ -433,15 +448,16 @@ def _build_legend(all_tags, tag_color, last_polled_at=""):
 
     tags_col = ""
     for tag_name in all_tags:
-        letter = tag_letter(tag_name)
+        letter = letter_map[tag_name]
         fgv = f"_fg{all_tags.index(tag_name)}"
+        lfs = "9px" if len(letter) > 1 else "12px"
         tags_col += (
             f"<div style='display:flex;align-items:center;gap:4px;margin-bottom:3px'>"
             f"<span id='circle_{letter}' data-jsvar='{fgv}' data-active='0'"
             f" data-color='{tag_color[tag_name]}' data-tag='{tag_name}'"
             f" onclick='toggleTag(this)' title='{tag_name}'"
             f" style='width:24px;height:24px;border-radius:50%;background:#d1d5db;"
-            f"color:#9ca3af;font-weight:bold;font-size:12px;display:flex;"
+            f"color:#9ca3af;font-weight:bold;font-size:{lfs};display:flex;"
             f"align-items:center;justify-content:center;cursor:pointer;user-select:none;flex-shrink:0'>"
             f"{letter}</span>"
             f"<span id='count_{letter}' style='margin-left:auto;color:#6b7280;font-size:11px;min-width:18px;text-align:right'></span>"
@@ -593,7 +609,8 @@ def render_html(data_24h: dict, all_tags: list, tag_color: dict, live: bool = Fa
 
     fg_init = "\n".join(f"var _fg{i}=L.featureGroup();" for i in range(len(all_tags)))
 
-    tag_meta = {tag: {"color": tag_color[tag], "letter": tag_letter(tag), "group": f"_fg{i}"}
+    letter_map = assign_letters(all_tags)
+    tag_meta = {tag: {"color": tag_color[tag], "letter": letter_map[tag], "group": f"_fg{i}"}
                 for i, tag in enumerate(all_tags)}
 
     compass_svg = (
@@ -638,7 +655,7 @@ def render_html(data_24h: dict, all_tags: list, tag_color: dict, live: bool = Fa
 
     polled_vals = [e.get("polled_at", "") for e in all_flat if e.get("polled_at")]
     last_polled_at = max(polled_vals) if polled_vals else ""
-    legend = _build_legend(all_tags, tag_color, last_polled_at)
+    legend = _build_legend(all_tags, tag_color, letter_map, last_polled_at)
 
     return (
         "<!DOCTYPE html>\n<html>\n<head>\n"
