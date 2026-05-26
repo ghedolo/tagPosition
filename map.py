@@ -28,6 +28,13 @@ TAG_COLORS = ["#facc15", "#22c55e", "#a78bfa", "#ec4899", "#f97316"]
 
 # Static JS — real braces, no f-string escaping needed
 _STATIC_JS = """
+function _fmtLocal(iso){
+  var d=new Date(iso);
+  return d.getFullYear()+'-'+(d.getMonth()+1).toString().padStart(2,'0')+'-'
+    +d.getDate().toString().padStart(2,'0')+'T'
+    +d.getHours().toString().padStart(2,'0')+':'+d.getMinutes().toString().padStart(2,'0');
+}
+
 function _mkIcon(meta,entry,isLast){
   var border=_SB[entry.status]||_DB,lc=isLast?'#ffffff':'#505050';
   var fs=meta.letter.length>1?'9px':'13px';
@@ -41,8 +48,8 @@ function _mkPop(entry){
   var acc=entry.accuracy_m||0;
   var s='<b>'+entry.tag+'</b><br>Status: '+(entry.status||'')
     +'<br>Own report: '+entry.is_own_report
-    +'<br>Location time: '+entry.location_time
-    +'<br>Polled at: '+(entry.polled_at||'?')
+    +'<br>Location time: '+_fmtLocal(entry.location_time)
+    +'<br>Polled at: '+(entry.polled_at?_fmtLocal(entry.polled_at):'?')
     +'<br>Accuracy: '+(acc?acc.toFixed(0)+' m':'?');
   if(entry.altitude_m)s+='<br>Altitude: '+entry.altitude_m+' m';
   return s;
@@ -77,7 +84,7 @@ function _addEntries(entries,lastByTag,isExt){
       var acc=entry.accuracy_m||0;
       var mk=L.marker([entry.lat,entry.lon],{
         icon:L.divIcon({html:_mkIcon(meta,entry,isLast),iconSize:[28,28],iconAnchor:[14,14],className:''})
-      }).bindPopup(_mkPop(entry),{maxWidth:220}).bindTooltip(meta.letter+' — '+entry.location_time);
+      }).bindPopup(_mkPop(entry),{maxWidth:220}).bindTooltip(meta.letter+' — '+_fmtLocal(entry.location_time));
       if(fg)mk.addTo(fg);
       var mid=(isExt?'ext_':'h24_')+tag+'_'+entry.location_time;
       if(acc){(function(mid,lat,lon,acc,color){

@@ -261,13 +261,13 @@ def main():
     args = parser.parse_args()
 
     if args.purge:
-        print(f"[Poller] Start: {datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')}")
+        print(f"[Poller] Start: {datetime.datetime.now().astimezone().strftime('%Y-%m-%dT%H:%M:%S%z')}")
         _purge()
-        print(f"[Poller] End: {datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')}")
+        print(f"[Poller] End: {datetime.datetime.now().astimezone().strftime('%Y-%m-%dT%H:%M:%S%z')}")
         return
 
     _check_auth()
-    print(f"[Poller] Start: {datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')}")
+    print(f"[Poller] Start: {datetime.datetime.now().astimezone().strftime('%Y-%m-%dT%H:%M:%S%z')}")
     print("[Poller] Fetching device list...")
     result_hex = request_device_list()
     device_list = parse_device_list_protobuf(result_hex)
@@ -314,7 +314,7 @@ def main():
     FcmReceiver().stop_listening()
 
     print(f"[Poller] Done. {len(new_entries)} new entry/entries written to {ARCHIVE_PATH}")
-    print(f"[Poller] End: {datetime.datetime.now(datetime.UTC).strftime('%Y-%m-%dT%H:%M:%SZ')}")
+    print(f"[Poller] End: {datetime.datetime.now().astimezone().strftime('%Y-%m-%dT%H:%M:%S%z')}")
 
 
 if __name__ == "__main__":
