@@ -4,6 +4,8 @@ Web map for tracking Google Find Hub Bluetooth tags (Android). Polls tag positio
 
 No official Google API is used. The network layer is provided by [GoogleFindMyTools](https://github.com/leonboe1/GoogleFindMyTools) (Leon Böttger, SEEMOO / TU Darmstadt).
 
+**Why this project exists:** the Google Find Hub app shows only the current position of each tracker — no history, no trail. It also provides a single position estimate with poor accuracy (often tens to hundreds of metres), with no way to aggregate multiple readings to narrow down where a tag actually is. tagPosition solves both: it records every fix over time and computes a weighted centroid from multiple readings, giving a much more precise position estimate.
+
 ---
 
 ## How it works
