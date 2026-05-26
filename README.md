@@ -6,6 +6,10 @@ No official Google API is used. The network layer is provided by [GoogleFindMyTo
 
 **Why this project exists:** the Google Find Hub app has three limitations that make it impractical for serious tracking: it shows only the current position with no history or trail; it displays only one tag at a time with no multi-tag map view; and its position estimate is often inaccurate by tens to hundreds of metres, with no way to aggregate multiple readings to narrow it down. tagPosition addresses all three: it records every fix over time, shows all tags simultaneously on a single map, and computes a weighted centroid from multiple readings for a much more precise position estimate.
 
+![screenshot](assets/screenshot.jpg)
+
+*The arrow marks the exact location of tag J. The raw fixes reported by Google are scattered over a wide area — individually they are too imprecise to be useful. The weighted centroid computed from those same fixes (pink dashed circle) pinpoints the actual position with much higher accuracy.*
+
 ---
 
 ## How it works
