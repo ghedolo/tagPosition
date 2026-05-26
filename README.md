@@ -109,7 +109,64 @@ Example cron entry that polls every 15 minutes and purges on Monday at midnight:
    bash sendToPi.sh
    ```
 3. On the Pi: recreate the venv, install dependencies (same steps as Installation), run `auth.py` once (requires Chrome), then start the server.
-4. Optionally create a systemd service (`server.py`) and proxy through nginx for LAN/remote access.
+4. Create a systemd service for `server.py` and proxy through nginx (see below).
+
+### systemd service
+
+`/etc/systemd/system/tagmap.service`:
+
+```ini
+[Unit]
+Description=Tag Map Server
+After=network.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/home/pi/tagPosition
+ExecStart=/home/pi/tagPosition/.venv/bin/python server.py --host 127.0.0.1 --port 8765
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl enable --now tagmap
+```
+
+After deploying updated Python files, restart with `sudo systemctl restart tagmap`.
+
+### nginx reverse proxy
+
+Install nginx and create an htpasswd file for basic auth:
+
+```bash
+sudo apt install nginx apache2-utils
+sudo htpasswd -c /etc/nginx/htpasswd <username>
+```
+
+`/etc/nginx/sites-enabled/tagmap`:
+
+```nginx
+server {
+    listen 7880;
+    auth_basic "Map";
+    auth_basic_user_file /etc/nginx/htpasswd;
+
+    location / {
+        proxy_pass http://127.0.0.1:8765;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header Connection '';
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600;
+    }
+}
+```
+
+`proxy_buffering off` and `proxy_read_timeout 3600` are required for the SSE stream (`/events`) to work correctly through the proxy.
 
 ---
 
