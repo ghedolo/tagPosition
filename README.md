@@ -274,8 +274,8 @@ This project was built entirely through a conversation with Claude Code. The num
 
 - **First message:** 2026-05-14
 - **Last message:** 2026-05-26
-- **Calendar span:** ~12 days, 6 sessions, 2536 messages (1012 user + 1524 assistant)
-- **Active conversation time: ~806 minutes (~13.4 hours)**
+- **Calendar span:** ~12 days, 6 sessions, 2897 messages (1158 user + 1739 assistant)
+- **Active conversation time: ~899 minutes (~15.0 hours)**
 
 *How active time is computed:* timestamps are sorted across all sessions; consecutive gaps ≤ 5 minutes are summed. Longer gaps (overnight, idle time) are discarded.
 
@@ -285,14 +285,14 @@ Cumulative token counts across all 6 sessions:
 
 | Metric | Tokens |
 |---|---:|
-| Input (non-cache) | 15,851 |
-| Output | 1,510,983 |
-| Cache write | 3,015,085 |
-| Cache read | 128,358,783 |
-| **Total** | **~133 M** |
+| Input (non-cache) | 16,211 |
+| Output | 1,629,599 |
+| Cache write | 3,319,914 |
+| Cache read | 153,915,422 |
+| **Total** | **~159 M** |
 
-Cache-read tokens dominate because every turn re-reads the existing context from the prompt cache. The actual model output is ~1.5 M tokens; new context accumulated into the cache is ~3 M tokens.
+Cache-read tokens dominate because every turn re-reads the existing context from the prompt cache. The actual model output is ~1.6 M tokens; new context accumulated into the cache is ~3.3 M tokens.
 
 ### Caveman mode
 
-4 of the 6 sessions were run with [caveman mode](https://github.com/ghedolo/vfd-clock) active — a Claude Code skill that drops filler words, articles, and pleasantries from assistant responses while keeping full technical content. The effect on token counts is measurable: in caveman sessions the assistant produced an average of **247 output tokens per message**, versus **409 tokens per message** in standard sessions — a **~40% reduction in output verbosity**. Cache-read tokens per message also dropped (~20%), because shorter assistant turns accumulate less context into subsequent turns. Total output tokens across all sessions: ~381 K with caveman, ~1.13 M without.
+4 of the 6 sessions were run with [caveman mode](https://github.com/ghedolo/vfd-clock) active — a Claude Code skill that drops filler words, articles, and pleasantries from assistant responses while keeping full technical content. The effect on token counts is measurable: in caveman sessions the assistant produced an average of **230 output tokens per message**, versus **409 tokens per message** in standard sessions — a **~44% reduction in output verbosity**. Cache-read tokens per message also dropped, because shorter assistant turns accumulate less context into subsequent turns. Total output tokens: ~497 K with caveman, ~1.13 M without.
