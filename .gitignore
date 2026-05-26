@@ -1,0 +1,7 @@
+.venv/
+tmp/
+data/
+diary.md
+__pycache__/
+*.pyc
+.DS_Store

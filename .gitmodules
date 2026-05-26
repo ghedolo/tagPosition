@@ -1,0 +1,3 @@
+[submodule "lib/GoogleFindMyTools"]
+	path = lib/GoogleFindMyTools
+	url = https://github.com/leonboe1/GoogleFindMyTools
