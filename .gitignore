@@ -2,6 +2,7 @@
 tmp/
 data/
 diary.md
+local_*.sh
 __pycache__/
 *.pyc
 .DS_Store
