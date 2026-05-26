@@ -28,6 +28,8 @@ TAG_COLORS = ["#facc15", "#22c55e", "#a78bfa", "#ec4899", "#f97316"]
 
 # Static JS — real braces, no f-string escaping needed
 _STATIC_JS = """
+var _chartHovered=null;
+
 function _fmtLocal(iso){
   var d=new Date(iso);
   return d.getFullYear()+'-'+(d.getMonth()+1).toString().padStart(2,'0')+'-'
@@ -53,6 +55,27 @@ function _mkPop(entry){
     +'<br>Accuracy: '+(acc?acc.toFixed(0)+' m':'?');
   if(entry.altitude_m)s+='<br>Altitude: '+entry.altitude_m+' m';
   return s;
+}
+
+function _isLast(me){return _lastByTag[me.tag]===me.t;}
+
+function _highlightMarker(me){
+  if(!me.v||!me.v._icon)return;
+  var meta=_tagMeta[me.tag];if(!meta)return;
+  var lc=_isLast(me)?'#ffffff':'#505050';
+  var fs=meta.letter.length>1?'9px':'13px';
+  me.v.setIcon(L.divIcon({html:'<div style="width:28px;height:28px;border-radius:50%;background:'+meta.color
+    +';border:3px solid #fff;box-shadow:0 0 0 2px #06b6d4,0 1px 4px rgba(0,0,0,.5)'
+    +';display:flex;align-items:center;justify-content:center'
+    +';font-weight:bold;font-size:'+fs+';color:'+lc+';font-family:sans-serif">'+meta.letter+'</div>',
+    iconSize:[28,28],iconAnchor:[14,14],className:''}));
+}
+
+function _restoreMarker(me){
+  if(!me.v)return;
+  var meta=_tagMeta[me.tag];if(!meta)return;
+  me.v.setIcon(L.divIcon({html:_mkIcon(meta,{status:me.st},_isLast(me)),
+    iconSize:[28,28],iconAnchor:[14,14],className:''}));
 }
 
 function toggleAccCircle(id,lat,lon,acc,color){
@@ -322,6 +345,18 @@ function _updateChart(){
     var ctx=document.getElementById('acc-chart');if(!ctx)return;
     _accChart=new Chart(ctx,{type:'scatter',data:{datasets:allDs},options:{
       animation:false,responsive:true,maintainAspectRatio:false,
+      onHover:function(evt,elements){
+        if(!elements.length){if(_chartHovered){_restoreMarker(_chartHovered);_chartHovered=null;}return;}
+        var el=elements[0];
+        var ds=_accChart.data.datasets[el.datasetIndex];
+        if(ds.label.startsWith('_ref'))return;
+        var pt=ds.data[el.index];
+        var target=null;
+        _markerEntries.forEach(function(me){if(me.tag===ds.label&&new Date(me.t).getTime()===pt.x)target=me;});
+        if(!target||target===_chartHovered)return;
+        if(_chartHovered)_restoreMarker(_chartHovered);
+        _chartHovered=target;_highlightMarker(target);
+      },
       scales:{
         x:{type:'linear',min:xMin,max:xMax,
           ticks:{color:'#9ca3af',maxTicksLimit:7,callback:function(v){
