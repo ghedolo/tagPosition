@@ -110,7 +110,10 @@ Example cron entry that polls every 15 minutes and purges on Monday at midnight:
    ```bash
    bash sendToPi.sh
    ```
-3. On the Pi: recreate the venv, install dependencies (same steps as Installation), run `auth.py` once (requires Chrome), then start the server.
+3. On the Pi: recreate the venv, install dependencies (same steps as Installation), create the runtime directories, run `auth.py` once (requires Chrome), then start the server.
+   ```bash
+   mkdir -p data tmp
+   ```
 4. Create a systemd service for `server.py` and proxy through nginx (see below).
 
 ### systemd service
