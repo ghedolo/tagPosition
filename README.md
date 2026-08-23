@@ -266,12 +266,13 @@ One colored circle per tracker, labelled with the first letter of the tag name. 
 | `1h` `3h` `8h` `24h` `3d` `5d` `*` | Time window filter. Windows ≥ 3d load older data on demand (one fetch). |
 | `10m` `30m` `100m` `∞` | Accuracy threshold for centroid computation. Points with accuracy above threshold are dimmed and excluded from the centroid. Default: ∞ (no filter). |
 | `vect` | Toggle path lines connecting consecutive fixes. |
+| `Δ` | Toggle the accuracy circle of every visible marker at once. Circles follow the time/status/tag filters; points above the accuracy threshold get a dashed unfilled circle. |
 
 ### Markers
 
 - **Click** — opens a popup: tag name, status, own/crowd report flag, location time, polled time, accuracy, altitude.
 - **Hover** — shows a dashed accuracy circle (radius = `accuracy_m`). Not shown on dimmed markers.
-- **Double-click** — pins/unpins a solid accuracy circle.
+- **Double-click** — pins/unpins a solid accuracy circle. The `Δ` button does the same for all visible markers at once.
 - **White letter** — most recent fix for that tag. Grey letter = older fix.
 
 ### Centroid (pink dashed circle)
@@ -329,26 +330,27 @@ Built with [Claude Code](https://claude.ai/claude-code) by Anthropic.
 This project was built entirely through a conversation with Claude Code. The numbers below are extracted from the local session transcripts (`~/.claude/projects/.../tagPosition/*.jsonl`) and from the git history.
 
 - **First message:** 2026-05-14
-- **Last message:** 2026-05-26
-- **Calendar span:** ~12 days, 6 sessions, 2897 messages (1158 user + 1739 assistant)
-- **Active conversation time: ~899 minutes (~15.0 hours)**
+- **Last message:** 2026-08-23
+- **Sessions:** 8 sessions, 3129 messages (1246 user + 1883 assistant)
+- **Calendar span:** ~12 days of work in May 2026 plus a maintenance day on 2026-08-23
+- **Active conversation time: ~957 minutes (~16.0 hours)**
 
 *How active time is computed:* timestamps are sorted across all sessions; consecutive gaps ≤ 5 minutes are summed. Longer gaps (overnight, idle time) are discarded.
 
 ### Tokens
 
-Cumulative token counts across all 6 sessions:
+Cumulative token counts across all 8 sessions:
 
 | Metric | Tokens |
 |---|---:|
-| Input (non-cache) | 16,211 |
-| Output | 1,629,599 |
-| Cache write | 3,319,914 |
-| Cache read | 153,915,422 |
-| **Total** | **~159 M** |
+| Input (non-cache) | 16,499 |
+| Output | 1,704,315 |
+| Cache write | 3,478,952 |
+| Cache read | 160,957,870 |
+| **Total** | **~166 M** |
 
-Cache-read tokens dominate because every turn re-reads the existing context from the prompt cache. The actual model output is ~1.6 M tokens; new context accumulated into the cache is ~3.3 M tokens.
+Cache-read tokens dominate because every turn re-reads the existing context from the prompt cache. The actual model output is ~1.7 M tokens; new context accumulated into the cache is ~3.5 M tokens.
 
 ### Caveman mode
 
-4 of the 6 sessions were run with [caveman mode](https://github.com/ghedolo/vfd-clock) active — a Claude Code skill that drops filler words, articles, and pleasantries from assistant responses while keeping full technical content. The effect on token counts is measurable: in caveman sessions the assistant produced an average of **230 output tokens per message**, versus **409 tokens per message** in standard sessions — a **~44% reduction in output verbosity**. Cache-read tokens per message also dropped, because shorter assistant turns accumulate less context into subsequent turns. Total output tokens: ~497 K with caveman, ~1.13 M without.
+6 of the 8 sessions were run with [caveman mode](https://github.com/ghedolo/vfd-clock) active — a Claude Code skill that drops filler words, articles, and pleasantries from assistant responses while keeping full technical content. The effect on token counts is measurable: in caveman sessions the assistant produced an average of **230 output tokens per message**, versus **409 tokens per message** in standard sessions — a **~44% reduction in output verbosity**. Cache-read tokens per message also dropped, because shorter assistant turns accumulate less context into subsequent turns. Total output tokens: ~572 K with caveman, ~1.13 M without. The per-message averages above are measured on the first 6 sessions, the only ones whose transcripts are still on disk in full.
