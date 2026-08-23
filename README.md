@@ -22,6 +22,7 @@ map.py       →  generates the map HTML (used by server.py and standalone)
 show.py      →  CLI summary / dump of the position archive
 update.sh    →  cron wrapper: runs poller.py, weekly --purge
 sendToPi.sh  →  helper: scp files to a Raspberry Pi deploy
+harden_pi.sh →  applies the permission / systemd / nginx hardening on the Pi
 ```
 
 Data flow: `poller.py` writes to `data/positions.json` (NDJSON, one entry per fix). `server.py` serves the map on demand and pushes SSE events when the file changes. The browser receives live updates without reloading.
@@ -44,7 +45,21 @@ cd tagPosition
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r lib/GoogleFindMyTools/requirements.txt
+python patches/fcm_patch.py
+python patches/perms_patch.py
 ```
+
+`requirements.txt` of the submodule pins only minimum versions. `requirements.lock`
+holds the exact versions of a working environment; use it to reproduce that
+environment instead: `pip install -r requirements.lock`.
+
+The two patch scripts fix the vendored submodule and must be re-run after every
+`git submodule update`:
+
+| Patch | Fixes |
+|---|---|
+| `patches/fcm_patch.py` | FCM push decryption with unpadded / prefix-less `crypto-key` and `encryption` headers |
+| `patches/perms_patch.py` | `secrets.json` written world-readable (644); after the patch it is created with mode 600 |
 
 ---
 
@@ -124,6 +139,15 @@ Example cron entry that polls every 15 minutes and purges on Monday at midnight:
    mkdir -p data tmp
    ```
 4. Create a systemd service for `server.py` and proxy through nginx (see below).
+5. Run the hardening script — it re-applies the submodule patches, restricts the
+   permissions of `secrets.json`, `data/` and `tmp/`, makes systemd start the server
+   with `umask 0077`, and adds a per-IP connection limit to nginx:
+   ```bash
+   bash harden_pi.sh --dry-run   # show what would change
+   bash harden_pi.sh
+   ```
+   It is idempotent, needs `sudo` for the systemd and nginx steps, and rolls the
+   systemd drop-in back automatically if the service fails to restart.
 
 ### systemd service
 
@@ -306,6 +330,65 @@ Log-scale scatter plot at the bottom of the page. X axis: time (matches the sele
 |---|---|---|
 | `TAG_RENAME` | `{"Google Pixel 9": "My Phone"}` | Rename a tag for display only. Raw name in archive is preserved. |
 | `TAG_COLORS` | yellow, green, violet, pink, orange | Cycle of fill colors assigned to tags in order. |
+
+---
+
+## Security
+
+The position archive is personal data and `secrets.json` grants full access to the
+Google Find Hub account, so the project is built for a single trusted user on a
+trusted network. What is enforced in the code:
+
+| Area | Measure |
+|---|---|
+| Credentials | `secrets.json` created with mode 600 (`patches/perms_patch.py`) |
+| Position data | `data/`, `tmp/` created with mode 700, files with 600 (`poller.py`, `map.py`) |
+| Tag names | HTML-escaped in the legend and slash-escaped inside the `<script>` block, so a tracker shared by another account cannot inject markup or JavaScript |
+| Third-party assets | Leaflet, leaflet-rotate and Chart.js loaded with Subresource Integrity hashes |
+| Live stream | `/events` capped at `MAX_SSE_CLIENTS` concurrent connections (8); each one holds a thread for its lifetime |
+| Generated files | `tmp/data_extended.json` written to a temporary file and renamed, so a concurrent request never reads a half-written file |
+| Server binding | `server.py` defaults to `127.0.0.1` and has no authentication of its own: never bind it to `0.0.0.0` without the nginx front end |
+
+What is **not** solved and stays the operator's decision:
+
+- **Transport encryption.** The nginx reverse proxy in this README listens in clear
+  HTTP: basic auth credentials and position data travel unencrypted. Acceptable on a
+  trusted LAN only. For remote access use a VPN/Tailscale, or add TLS — `harden_pi.sh`
+  prints the three options at the end of its run.
+- **Retention.** `poller.py --purge` does not delete anything: it moves entries older
+  than `PURGE_DAYS` into `data/position_<from>_<to>.json`, which stays on disk
+  indefinitely. Delete the rotated files yourself if you do not want a permanent
+  location history.
+
+---
+
+## Tests
+
+The suite covers the local logic only: no Google API call is ever made, and no file
+outside a temporary directory is written.
+
+```bash
+source .venv/bin/activate
+pip install -r requirements-dev.txt
+python -m pytest
+```
+
+| File | Covers |
+|---|---|
+| `tests/test_map_logic.py` | `assign_letters`, `load_entries`, `split_entries` — grouping, sorting, tag rename, malformed NDJSON |
+| `tests/test_map_render.py` | `render_html` — page structure, map centring, embedded JSON payloads, live/static variants, tag-name injection |
+| `tests/test_poller_archive.py` | `_purge`, `_load_archive_state`, `_data_lock`, `_ts_to_fname`, `_status_name` |
+| `tests/test_poller_dedup.py` | `poller.main()` with the network layer stubbed: which fixes get appended and which are discarded |
+| `tests/test_show.py` | `show.py` filters (tag, date range) and summary output |
+| `tests/test_server.py` | a real HTTP server on an ephemeral port: routing, 404, 503, `data_extended.json`, SSE ping and update |
+| `tests/test_scripts_and_hygiene.py` | `update.sh` cron logic with a stubbed `date`, shell syntax, git-ignore rules for credentials and position data |
+| `tests/test_security_regressions.py` | the findings of the security review: file permissions, HTML escaping, SRI, loopback binding |
+
+All tests are green. `tests/test_security_regressions.py` pins the fixes of the
+security review, so a regression on file permissions, HTML escaping or SRI fails the
+suite. A test marked `xfail` would describe a known open issue; with `strict=True`
+it turns into a failure as soon as the issue is fixed, which is the signal to remove
+the marker.
 
 ---
 
