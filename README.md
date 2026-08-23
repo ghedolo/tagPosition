@@ -337,7 +337,8 @@ Log-scale scatter plot at the bottom of the page. X axis: time (matches the sele
 
 The position archive is personal data and `secrets.json` grants full access to the
 Google Find Hub account, so the project is built for a single trusted user on a
-trusted network. What is enforced in the code:
+trusted network. The measures below come from a code review of the whole project
+carried out on 2026-08-23. What is enforced in the code:
 
 | Area | Measure |
 |---|---|
@@ -414,26 +415,28 @@ This project was built entirely through a conversation with Claude Code. The num
 
 - **First message:** 2026-05-14
 - **Last message:** 2026-08-23
-- **Sessions:** 8 sessions, 3129 messages (1246 user + 1883 assistant)
-- **Calendar span:** ~12 days of work in May 2026 plus a maintenance day on 2026-08-23
-- **Active conversation time: ~957 minutes (~16.0 hours)**
+- **Sessions:** 9 sessions, 3343 messages (1324 user + 2019 assistant)
+- **Calendar span:** ~12 days of work in May 2026 plus two maintenance days on 2026-08-23 (feature refresh, then security review and test suite)
+- **Active conversation time: ~995 minutes (~16.6 hours)**
 
 *How active time is computed:* timestamps are sorted across all sessions; consecutive gaps ≤ 5 minutes are summed. Longer gaps (overnight, idle time) are discarded.
 
 ### Tokens
 
-Cumulative token counts across all 8 sessions:
+Cumulative token counts across all 9 sessions:
 
 | Metric | Tokens |
 |---|---:|
-| Input (non-cache) | 16,499 |
-| Output | 1,704,315 |
-| Cache write | 3,478,952 |
-| Cache read | 160,957,870 |
-| **Total** | **~166 M** |
+| Input (non-cache) | 16,771 |
+| Output | 1,818,802 |
+| Cache write | 3,697,520 |
+| Cache read | 173,314,708 |
+| **Total** | **~179 M** |
 
-Cache-read tokens dominate because every turn re-reads the existing context from the prompt cache. The actual model output is ~1.7 M tokens; new context accumulated into the cache is ~3.5 M tokens.
+Cache-read tokens dominate because every turn re-reads the existing context from the prompt cache. The actual model output is ~1.8 M tokens; new context accumulated into the cache is ~3.7 M tokens.
 
 ### Caveman mode
 
-6 of the 8 sessions were run with [caveman mode](https://github.com/ghedolo/vfd-clock) active — a Claude Code skill that drops filler words, articles, and pleasantries from assistant responses while keeping full technical content. The effect on token counts is measurable: in caveman sessions the assistant produced an average of **230 output tokens per message**, versus **409 tokens per message** in standard sessions — a **~44% reduction in output verbosity**. Cache-read tokens per message also dropped, because shorter assistant turns accumulate less context into subsequent turns. Total output tokens: ~572 K with caveman, ~1.13 M without. The per-message averages above are measured on the first 6 sessions, the only ones whose transcripts are still on disk in full.
+7 of the 9 sessions were run with [caveman mode](https://github.com/ghedolo/vfd-clock) active — a Claude Code skill that drops filler words, articles, and pleasantries from assistant responses while keeping full technical content. The effect on token counts is measurable: in caveman sessions the assistant produced an average of **230 output tokens per message**, versus **409 tokens per message** in standard sessions — a **~44% reduction in output verbosity**. Cache-read tokens per message also dropped, because shorter assistant turns accumulate less context into subsequent turns. Total output tokens: ~687 K with caveman, ~1.13 M without. The per-message averages above are measured on the first 6 sessions, the only ones whose transcripts were still on disk in full when the averages were computed.
+
+The ninth session (security review and test suite) is an outlier at **842 output tokens per message**: almost all of its output is file content written through tools — test modules, patch scripts, `harden_pi.sh` — not prose, and caveman mode compresses prose only.
