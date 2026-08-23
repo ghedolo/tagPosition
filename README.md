@@ -72,7 +72,12 @@ Fetches all trackers on your account, decrypts locations, appends new fixes to `
 source .venv/bin/activate && python server.py
 ```
 
-Open `http://127.0.0.1:8765` in a browser. The map updates automatically when `poller.py` writes new data.
+Two tests, depending on where the server runs:
+
+- **Local machine** — open `http://127.0.0.1:8765` in a browser.
+- **Raspberry Pi** — open `http://<PI_IP>:7880` from another machine on the LAN (nginx reverse proxy with basic auth, see [nginx reverse proxy](#nginx-reverse-proxy)). `http://<PI_IP>:8765` does **not** answer from outside: `server.py` binds `127.0.0.1` only. To check port 8765 directly, do it from the Pi itself: `curl -sI http://127.0.0.1:8765`.
+
+The map updates automatically when `poller.py` writes new data.
 
 ### Generate a static map (no server)
 
@@ -176,6 +181,57 @@ server {
 ```
 
 `proxy_buffering off` and `proxy_read_timeout 3600` are required for the SSE stream (`/events`) to work correctly through the proxy.
+
+### Boot checks
+
+After a fresh install — and after any change to the service, cron or nginx — verify that everything comes back up on its own. Run on the Pi:
+
+**1. Server service**
+
+```bash
+systemctl is-enabled tagmap    # must print: enabled  (disabled = will NOT start at boot)
+systemctl is-active tagmap     # must print: active
+systemctl status tagmap -n 20  # check ExecStart path and recent log lines
+```
+
+If it prints `disabled`, enable it: `sudo systemctl enable tagmap`.
+
+**2. Polling cron**
+
+```bash
+crontab -l                     # the update.sh line must be there
+systemctl is-enabled cron      # must print: enabled
+tail -20 /home/pi/tagPosition/tmp/update.log
+```
+
+The log confirms the job actually runs; an empty or stale log means cron is not firing, or `update.sh` is failing before writing.
+
+**3. nginx**
+
+```bash
+systemctl is-enabled nginx
+systemctl is-active nginx
+```
+
+**4. Runtime prerequisites**
+
+```bash
+ls -ld /home/pi/tagPosition/data /home/pi/tagPosition/tmp   # must exist, owned by pi
+ls /home/pi/tagPosition/.venv/bin/python                    # venv must be present
+grep -i -m5 'error\|auth' /home/pi/tagPosition/tmp/update.log
+```
+
+An expired Google token does not stop the service — the map stays up but no new fixes arrive, so check the poller log as well.
+
+**5. Real reboot test**
+
+```bash
+sudo reboot
+# wait ~60 s, then from another machine:
+ssh pi@<PI_IP> 'systemctl is-active tagmap nginx cron'
+```
+
+Then open `http://<PI_IP>:7880` and confirm the map loads with current data.
 
 ---
 
