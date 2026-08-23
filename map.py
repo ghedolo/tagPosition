@@ -83,6 +83,33 @@ function toggleAccCircle(id,lat,lon,acc,color){
   else{_accCircles[id]=L.circle([lat,lon],{radius:acc,color:color,fillColor:color,fillOpacity:0.12,weight:1.5}).addTo(_map);}
 }
 
+function _syncAllAcc(){
+  if(!_allAccVisible)return;
+  _addingStationary=true;
+  _markerEntries.forEach(function(me){
+    var mk=me.v;if(!mk||!mk._icon||mk._icon.style.display==='none')return;
+    if(!(me.acc>0)||_accCircles[me.id])return;
+    var meta=_tagMeta[me.tag];if(!meta)return;
+    var dim=me.acc>_accThreshold;
+    _accCircles[me.id]=L.circle([me.lat,me.lon],{radius:me.acc,color:meta.color,
+      fillColor:meta.color,fillOpacity:dim?0:0.12,weight:dim?1:1.5,
+      opacity:dim?0.45:1,dashArray:dim?'4,4':null}).addTo(_map);
+  });
+  _addingStationary=false;
+}
+
+function _clearAllAcc(){
+  _addingStationary=true;
+  Object.keys(_accCircles).forEach(function(id){_accCircles[id].remove();delete _accCircles[id];});
+  _addingStationary=false;
+}
+
+window.toggleAllAcc=function(btn){
+  _allAccVisible=!_allAccVisible;
+  if(_allAccVisible)_syncAllAcc();else _clearAllAcc();
+  btn.style.background=_allAccVisible?'#6b7280':'#e5e7eb';btn.style.color=_allAccVisible?'#fff':'#374151';
+};
+
 function _addEntries(entries,lastByTag,isExt){
   var byTag={};
   entries.forEach(function(e){if(!byTag[e.tag])byTag[e.tag]=[];byTag[e.tag].push(e);});
@@ -198,7 +225,7 @@ function _applyVisibility(){
     var stOk=_statusEnabled[se.st]!==false&&_statusEnabled[se.sta]!==false;
     p._path.style.display=(tOk&&stOk&&_pathsVisible)?'':'none';
   });
-  _applyArrows();_updateStationary();_updateCounts();try{_updateChart();}catch(e){console.error('chart',e);}_visLock=false;
+  _syncAllAcc();_applyArrows();_updateStationary();_updateCounts();try{_updateChart();}catch(e){console.error('chart',e);}_visLock=false;
 }
 window._applyVisibility=_applyVisibility;
 
@@ -390,6 +417,7 @@ window.setAccThreshold=function(val,btn){
     if(!me.v)return;
     me.v.setOpacity((me.acc>0&&me.acc>_accThreshold)?0.25:1);
   });
+  if(_allAccVisible){_clearAllAcc();_syncAllAcc();}
   _updateStationary();
 };
 """
@@ -540,6 +568,10 @@ def _build_legend(all_tags, tag_color, letter_map, last_polled_at=""):
         "<button id='btn-paths' onclick='togglePaths(this)'"
         " style='background:#e5e7eb;color:#374151;border:none;border-radius:4px;"
         "padding:2px 0;cursor:pointer;font-size:11px;width:100%;margin-top:4px'>vect</button>"
+        "<button id='btn-allacc' onclick='toggleAllAcc(this)'"
+        " style='background:#e5e7eb;color:#374151;border:none;border-radius:4px;"
+        "padding:2px 0;cursor:pointer;font-size:11px;width:100%;margin-top:3px'"
+        " title='Accuracy circles for all visible markers'>\u0394</button>"
         "</div>"
     )
 
@@ -558,6 +590,7 @@ def _build_legend(all_tags, tag_color, letter_map, last_polled_at=""):
         "<div style='margin-top:8px'>"
         "<b>Marker</b> — click to open popup with detail (tag, time, accuracy, status)<br>"
         "<b>Marker dbl-click</b> — show/hide accuracy circle (radius = accuracy_m)<br>"
+        "<b>\u0394</b> — show/hide the accuracy circle of every visible marker at once<br>"
         "<b>Last marker</b> — white letter instead of grey = most recent fix for that tag<br>"
         "</div>"
         "<div style='margin-top:8px'>"
@@ -677,6 +710,7 @@ def render_html(data_24h: dict, all_tags: list, tag_color: dict, live: bool = Fa
         + "var _SB=" + json.dumps(STATUS_BORDER, separators=(',', ':')) + ";\n"
         + "var _DB='" + DEFAULT_BORDER + "';\n"
         + "var _markerEntries=[],_segEntries=[],_accCircles={},_hoverCircle=null,_accChart=null;\n"
+        + "var _allAccVisible=false;\n"
         + "var _currentMaxAge=3/24,_pathsVisible=false,_visLock=false,_visTimer=null,_addingStationary=false;\n"
         + "var _accThreshold=Infinity;\n"
         + "var _statusEnabled={'LAST_KNOWN':false,'CROWDSOURCED':false,'AGGREGATED':true};\n"
