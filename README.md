@@ -297,7 +297,11 @@ One colored circle per tracker, labelled with the first letter of the tag name. 
 - **Click** — opens a popup: tag name, status, own/crowd report flag, location time, polled time, accuracy, altitude.
 - **Hover** — shows a dashed accuracy circle (radius = `accuracy_m`). Not shown on dimmed markers.
 - **Double-click** — pins/unpins a solid accuracy circle. The `Δ` button does the same for all visible markers at once.
-- **White letter** — most recent fix for that tag. Grey letter = older fix.
+- **White letter** — most recent fix for that tag. Grey letter = older fix. The most
+  recent fix is computed on the whole dataset **before** the filters are applied, so if
+  it is excluded by the status or time filter no marker of that tag shows a white
+  letter. This happens routinely when the newest fix is `LAST_KNOWN` (off by default in
+  the legend) while the visible ones are `AGGREGATED`.
 
 ### Centroid (pink dashed circle)
 
