@@ -1,6 +1,7 @@
 import sys
 import os
 import json
+import html
 import argparse
 from collections import defaultdict
 from datetime import datetime, timezone, timedelta
@@ -8,6 +9,10 @@ from datetime import datetime, timezone, timedelta
 ARCHIVE_PATH       = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "positions.json")
 OUTPUT_PATH        = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tmp", "map.html")
 EXTENDED_JSON_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tmp", "data_extended.json")
+
+# Generated files hold position history (personal data): owner-only.
+OUTPUT_DIR_MODE = 0o700
+OUTPUT_FILE_MODE = 0o600
 
 TAG_RENAME = {"Google Pixel 9": "My Phone"}
 
@@ -423,6 +428,40 @@ window.setAccThreshold=function(val,btn){
 """
 
 
+def secure_dir(path):
+    os.makedirs(path, exist_ok=True)
+    try:
+        os.chmod(path, OUTPUT_DIR_MODE)
+    except OSError as ex:
+        print(f"[Map] WARNING: cannot chmod {path}: {ex}", file=sys.stderr)
+
+
+def secure_file(path):
+    try:
+        os.chmod(path, OUTPUT_FILE_MODE)
+    except OSError as ex:
+        print(f"[Map] WARNING: cannot chmod {path}: {ex}", file=sys.stderr)
+
+
+def _js_json(obj) -> str:
+    """json.dumps for a value embedded inside a <script> block.
+
+    json.dumps does not escape "/", so a string containing "</script>" would close
+    the block early and let the rest be parsed as markup. Escaping the slash keeps
+    the value inside the JS string.
+    """
+    return json.dumps(obj, separators=(",", ":")).replace("</", "<\\/")
+
+
+def _attr(value) -> str:
+    """Escape a value for use inside a single-quoted HTML attribute.
+
+    html.escape(quote=True) encodes both " and ' (as &#x27;), so the value cannot
+    terminate the attribute.
+    """
+    return html.escape(str(value), quote=True)
+
+
 def assign_letters(all_tags: list) -> dict:
     by_first = {}
     for name in all_tags:
@@ -519,18 +558,22 @@ def _build_legend(all_tags, tag_color, letter_map, last_polled_at=""):
     tags_col = ""
     for tag_name in all_tags:
         letter = letter_map[tag_name]
+        # tag names come from the Google device list; for a shared tracker the name is
+        # chosen by another account, so it is untrusted and must be escaped.
+        e_tag = _attr(tag_name)
+        e_letter = _attr(letter)
         fgv = f"_fg{all_tags.index(tag_name)}"
         lfs = "9px" if len(letter) > 1 else "12px"
         tags_col += (
             f"<div style='display:flex;align-items:center;gap:4px;margin-bottom:3px'>"
-            f"<span id='circle_{letter}' data-jsvar='{fgv}' data-active='0'"
-            f" data-color='{tag_color[tag_name]}' data-tag='{tag_name}'"
-            f" onclick='toggleTag(this)' title='{tag_name}'"
+            f"<span id='circle_{e_letter}' data-jsvar='{fgv}' data-active='0'"
+            f" data-color='{_attr(tag_color[tag_name])}' data-tag='{e_tag}'"
+            f" onclick='toggleTag(this)' title='{e_tag}'"
             f" style='width:24px;height:24px;border-radius:50%;background:#d1d5db;"
             f"color:#9ca3af;font-weight:bold;font-size:{lfs};display:flex;"
             f"align-items:center;justify-content:center;cursor:pointer;user-select:none;flex-shrink:0'>"
-            f"{letter}</span>"
-            f"<span id='count_{letter}' style='margin-left:auto;color:#6b7280;font-size:11px;min-width:18px;text-align:right'></span>"
+            f"{html.escape(str(letter))}</span>"
+            f"<span id='count_{e_letter}' style='margin-left:auto;color:#6b7280;font-size:11px;min-width:18px;text-align:right'></span>"
             f"</div>"
         )
 
@@ -704,10 +747,10 @@ def render_html(data_24h: dict, all_tags: list, tag_color: dict, live: bool = Fa
         + "{attribution:'© <a href=\"https://www.openstreetmap.org/copyright\">OpenStreetMap</a>',maxZoom:19}"
         + ").addTo(_map);\n"
         + fg_init + "\n"
-        + "var _tagMeta=" + json.dumps(tag_meta, separators=(',', ':')) + ";\n"
-        + "var _lastByTag=" + json.dumps(last_by_tag, separators=(',', ':')) + ";\n"
-        + "var _raw24h=" + json.dumps(entries_24h, separators=(',', ':')) + ";\n"
-        + "var _SB=" + json.dumps(STATUS_BORDER, separators=(',', ':')) + ";\n"
+        + "var _tagMeta=" + _js_json(tag_meta) + ";\n"
+        + "var _lastByTag=" + _js_json(last_by_tag) + ";\n"
+        + "var _raw24h=" + _js_json(entries_24h) + ";\n"
+        + "var _SB=" + _js_json(STATUS_BORDER) + ";\n"
         + "var _DB='" + DEFAULT_BORDER + "';\n"
         + "var _markerEntries=[],_segEntries=[],_accCircles={},_hoverCircle=null,_accChart=null;\n"
         + "var _allAccVisible=false;\n"
@@ -738,11 +781,21 @@ def render_html(data_24h: dict, all_tags: list, tag_color: dict, live: bool = Fa
         "<meta charset='utf-8'/>\n"
         "<meta name='viewport' content='width=device-width,initial-scale=1.0'/>\n"
         "<title>Tag Map</title>\n"
-        "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.3/dist/leaflet.css'/>\n"
-        "<script src='https://unpkg.com/leaflet@1.9.3/dist/leaflet.js'></script>\n"
-        "<link rel='stylesheet' href='https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.css'/>\n"
-        "<script src='https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js'></script>\n"
-        "<script src='https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'></script>\n"
+        "<link rel='stylesheet' href='https://unpkg.com/leaflet@1.9.3/dist/leaflet.css'"
+        " integrity='sha384-o/2yZuJZWGJ4s/adjxVW71R+EO/LyCwdQfP5UWSgX/w87iiTXuvDZaejd3TsN7mf'"
+        " crossorigin='anonymous'/>\n"
+        "<script src='https://unpkg.com/leaflet@1.9.3/dist/leaflet.js'"
+        " integrity='sha384-okbbMvvx/qfQkmiQKfd5VifbKZ/W8p1qIsWvE1ROPUfHWsDcC8/BnHohF7vPg2T6'"
+        " crossorigin='anonymous'></script>\n"
+        "<link rel='stylesheet' href='https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.css'"
+        " integrity='sha384-lJxHJ8v1AvSjOuF/3MtSiQOiBJtn//+tiKYdGo7WNtGNDIHW18DLjOnP3MVx1wfY'"
+        " crossorigin='anonymous'/>\n"
+        "<script src='https://unpkg.com/leaflet-rotate@0.2.8/dist/leaflet-rotate-src.js'"
+        " integrity='sha384-WaInCl5qKhXVwIIJ/XMxRvjzCTIkZ1uH9Evm3mNtVtfXWhJGU3EkedDBaf/037Ew'"
+        " crossorigin='anonymous'></script>\n"
+        "<script src='https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js'"
+        " integrity='sha384-e6nUZLBkQ86NJ6TVVKAeSaK8jWa3NhkYWZFomE39AvDbQWeie9PlQqM3pmYW5d1g'"
+        " crossorigin='anonymous'></script>\n"
         "<style>\n"
         "html,body{margin:0;padding:0;height:100%;overflow:hidden;}\n"
         "#map{position:absolute;top:0;left:0;right:0;bottom:280px;}\n"
@@ -796,13 +849,15 @@ def main():
 
     html = render_html(data_24h, all_tags, tag_color)
 
-    os.makedirs(os.path.dirname(args.out), exist_ok=True)
+    secure_dir(os.path.dirname(args.out))
     with open(args.out, "w", encoding="utf-8") as f:
         f.write(html)
+    secure_file(args.out)
 
     if not args.latest:
         with open(EXTENDED_JSON_PATH, "w") as f:
             json.dump(extended, f, separators=(',', ':'))
+        secure_file(EXTENDED_JSON_PATH)
         print(f"Extended data: {len(extended)} entries → {EXTENDED_JSON_PATH}")
 
     print(f"Map saved to: {args.out}")

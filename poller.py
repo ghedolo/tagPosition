@@ -15,6 +15,10 @@ ARCHIVE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", 
 LOCK_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", ".poller.lock")
 PURGE_DAYS = 7
 
+# Position history is personal data: keep it readable by the owner only.
+DATA_DIR_MODE = 0o700
+DATA_FILE_MODE = 0o600
+
 from Auth.fcm_receiver import FcmReceiver
 from Auth.token_cache import get_cached_value
 from NovaApi.ExecuteAction.LocateTracker.location_request import create_location_request
@@ -30,9 +34,24 @@ from KeyBackup.cloud_key_decryptor import decrypt_aes_gcm
 from FMDNCrypto.foreign_tracker_cryptor import decrypt
 
 
+def _secure_dir(path):
+    os.makedirs(path, exist_ok=True)
+    try:
+        os.chmod(path, DATA_DIR_MODE)
+    except OSError as ex:
+        print(f"[Poller] WARNING: cannot chmod {path}: {ex}", file=sys.stderr)
+
+
+def _secure_file(path):
+    try:
+        os.chmod(path, DATA_FILE_MODE)
+    except OSError as ex:
+        print(f"[Poller] WARNING: cannot chmod {path}: {ex}", file=sys.stderr)
+
+
 @contextmanager
 def _data_lock():
-    os.makedirs(os.path.dirname(LOCK_PATH), exist_ok=True)
+    _secure_dir(os.path.dirname(LOCK_PATH))
     with open(LOCK_PATH, "w") as lf:
         fcntl.flock(lf, fcntl.LOCK_EX)
         try:
@@ -90,10 +109,12 @@ def _purge():
         with open(archive_path, "w") as f:
             for entry in old:
                 f.write(json.dumps(entry) + "\n")
+        _secure_file(archive_path)
 
         with open(ARCHIVE_PATH, "w") as f:
             for entry in recent:
                 f.write(json.dumps(entry) + "\n")
+        _secure_file(ARCHIVE_PATH)
 
         print(f"[Poller] Archived {len(old)} entries -> {archive_name}")
         print(f"[Poller] Kept {len(recent)} entries in positions.json")
@@ -306,10 +327,11 @@ def main():
                 if tag not in latest_per_tag or loc_time > latest_per_tag[tag]:
                     latest_per_tag[tag] = loc_time
 
-        os.makedirs(os.path.dirname(ARCHIVE_PATH), exist_ok=True)
+        _secure_dir(os.path.dirname(ARCHIVE_PATH))
         with open(ARCHIVE_PATH, "a") as f:
             for entry in new_entries:
                 f.write(json.dumps(entry) + "\n")
+        _secure_file(ARCHIVE_PATH)
 
     FcmReceiver().stop_listening()
 

@@ -4,17 +4,22 @@ import os
 import sys
 import json
 import time
+import threading
 import argparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from datetime import datetime, timezone, timedelta
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from map import (
-    load_entries, split_entries, render_html,
+    load_entries, split_entries, render_html, secure_dir, secure_file,
     TAG_RENAME, TAG_COLORS, ARCHIVE_PATH, EXTENDED_JSON_PATH,
 )
 
 POLL_INTERVAL = 5  # seconds between mtime checks
+MAX_SSE_CLIENTS = 8  # each /events connection holds a thread for its whole lifetime
+
+_sse_clients = 0
+_sse_lock = threading.Lock()
 
 _TAG_PRIORITY = set(TAG_RENAME.values())
 
@@ -55,16 +60,22 @@ class Handler(BaseHTTPRequestHandler):
         try:
             data_24h, extended, all_tags, tag_color = _build_data()
         except SystemExit:
-            self.send_error(503, "No data — run poller.py first")
+            # the reason phrase is latin-1 encoded by http.server: ASCII only
+            self.send_error(503, "No data - run poller.py first")
             return
         try:
             html = render_html(data_24h, all_tags, tag_color, live=True)
         except SystemExit:
             self.send_error(503, "No entries in last 24h")
             return
-        os.makedirs(os.path.dirname(EXTENDED_JSON_PATH), exist_ok=True)
-        with open(EXTENDED_JSON_PATH, "w") as f:
+        # write to a temporary file in the same directory and rename: a concurrent
+        # GET /data_extended.json must never observe a half-written file
+        secure_dir(os.path.dirname(EXTENDED_JSON_PATH))
+        tmp_path = EXTENDED_JSON_PATH + f".{os.getpid()}.{threading.get_ident()}.tmp"
+        with open(tmp_path, "w") as f:
             json.dump(extended, f, separators=(",", ":"))
+        secure_file(tmp_path)
+        os.replace(tmp_path, EXTENDED_JSON_PATH)
         body = html.encode("utf-8")
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
@@ -86,6 +97,19 @@ class Handler(BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def _serve_sse(self):
+        global _sse_clients
+        with _sse_lock:
+            if _sse_clients >= MAX_SSE_CLIENTS:
+                self.send_error(503, "Too many live connections")
+                return
+            _sse_clients += 1
+        try:
+            self._sse_loop()
+        finally:
+            with _sse_lock:
+                _sse_clients -= 1
+
+    def _sse_loop(self):
         self.send_response(200)
         self.send_header("Content-Type", "text/event-stream")
         self.send_header("Cache-Control", "no-cache")
