@@ -25,7 +25,7 @@ sendToPi.sh  →  helper: scp files to a Raspberry Pi deploy
 harden_pi.sh →  applies the permission / systemd / nginx hardening on the Pi
 ```
 
-Data flow: `poller.py` writes to `data/positions.json` (NDJSON, one entry per fix). `server.py` serves the map on demand and pushes SSE events when the file changes. The browser receives live updates without reloading.
+Data flow: `poller.py` writes to `data/positions.json` (NDJSON, one entry per fix) and its own run log to `tmp/poller.log`, rotated at 5 MB with 5 backups. `server.py` serves the map on demand and pushes SSE events when the file changes. The browser receives live updates without reloading.
 
 ---
 
@@ -122,8 +122,25 @@ source .venv/bin/activate && python poller.py --purge
 Example cron entry that polls every 15 minutes and purges on Monday at midnight:
 
 ```
-*/15 * * * * cd /home/pi/tagPosition && bash update.sh >> tmp/update.log 2>&1
+*/15 * * * * bash -c 'cd /home/pi/tagPosition && bash update.sh >> tmp/cron.log 2>&1'
 ```
+
+`poller.py` writes its own log to `tmp/poller.log` through a `RotatingFileHandler`:
+when the file passes 5 MB it becomes `poller.log.1`, older backups shift up to
+`poller.log.5` and the oldest is dropped, so the log is capped at about 30 MB.
+Change the limits with `LOG_MAX_BYTES` and `LOG_BACKUP_COUNT` in `poller.py`, or
+point the log elsewhere with `--log-file`.
+
+**Do not redirect cron to `tmp/poller.log`.** The poller opens that file itself,
+so a redirect onto the same path writes every line twice and breaks the rotation:
+on rotation the handler renames `poller.log` to `poller.log.1` and opens a new
+`poller.log`, while the descriptor cron opened stays attached to the renamed
+inode. `poller.log.1` would then keep growing past the size limit and never be
+rotated again.
+
+The redirect target above, `tmp/cron.log`, only collects failures that happen
+before Python starts (missing venv, shell syntax error), so it stays small.
+Replace it with `/dev/null` if those are not worth keeping.
 
 ---
 
@@ -225,7 +242,7 @@ If it prints `disabled`, enable it: `sudo systemctl enable tagmap`.
 ```bash
 crontab -l                     # the update.sh line must be there
 systemctl is-enabled cron      # must print: enabled
-tail -20 /home/pi/tagPosition/tmp/update.log
+tail -20 /home/pi/tagPosition/tmp/poller.log
 ```
 
 The log confirms the job actually runs; an empty or stale log means cron is not firing, or `update.sh` is failing before writing.
@@ -242,7 +259,7 @@ systemctl is-active nginx
 ```bash
 ls -ld /home/pi/tagPosition/data /home/pi/tagPosition/tmp   # must exist, owned by pi
 ls /home/pi/tagPosition/.venv/bin/python                    # venv must be present
-grep -i -m5 'error\|auth' /home/pi/tagPosition/tmp/update.log
+grep -i -m5 'error\|auth' /home/pi/tagPosition/tmp/poller.log
 ```
 
 An expired Google token does not stop the service — the map stays up but no new fixes arrive, so check the poller log as well.
@@ -383,6 +400,7 @@ python -m pytest
 | `tests/test_map_logic.py` | `assign_letters`, `load_entries`, `split_entries` — grouping, sorting, tag rename, malformed NDJSON |
 | `tests/test_map_render.py` | `render_html` — page structure, map centring, embedded JSON payloads, live/static variants, tag-name injection |
 | `tests/test_poller_archive.py` | `_purge`, `_load_archive_state`, `_data_lock`, `_ts_to_fname`, `_status_name` |
+| `tests/test_poller_logging.py` | the rotating log: size cap, backup count, owner-only permissions, INFO to stdout and WARNING to stderr |
 | `tests/test_poller_dedup.py` | `poller.main()` with the network layer stubbed: which fixes get appended and which are discarded |
 | `tests/test_show.py` | `show.py` filters (tag, date range) and summary output |
 | `tests/test_server.py` | a real HTTP server on an ephemeral port: routing, 404, 503, `data_extended.json`, SSE ping and update |
